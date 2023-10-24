@@ -200,3 +200,53 @@ int execvp(const char* command, char *argv[]);
 
 
 
+> process는 스스로 움직이지는 않고 process 에 관한 모든 정보를 담고 있는 PCB(Process control blocks)를 통해서 운영체제가 관리해준다.
+
+```c
+// PCB process에 관한 모든 정보를 담고 있다.
+struct task_struct {
+    volatile long		state; // TASK_RUNNING, TASK_INTERRUPTIBLE ... 상태를 탐는다.
+    void				*stack; // Pointer to the kernel-mode stack
+    ...
+    unsigned int		cpu; // 몇 번 cpu에서 작동하는 지 기록
+    struct mm_struck	*mm; // memory virtualization 정보가 포함된 구조체. (페이징 등)
+    ...
+    struct task_struct	*parent; // parent 의 PCB 를 가리킴
+    struct list_head	children; // 프로세스를 list 형태로 관리
+    ...
+    struct files_struct	*files; // 프로세스가 오픈한 파일의 정보를 갖고 있음.
+    ...
+}
+
+```
+
+- Each user process has both a user-mode stack and kernel-mode stack
+- When a thread enters the kernel, the contents of all registers used by a process in user-mode are saved on the kernel-mode stack (i.e Linux saves the context information of a process into its kernel-mode stack)
+
+
+
+## Scheduling queues
+
+- OS manages three types of the queue
+  - Run queue
+  - Ready queue
+  - Waiting queue
+
+> 같은 상태를 갖는 프로세스가 여러개 있을 수 있기 때문에 큐로 관리함으로써  효과적으로 원하는 프로세스를 찾는다.
+
+| Time | P0      | P1      | Notes                                 | Run queue | Ready queue | Waiting queue |
+| ---- | ------- | ------- | ------------------------------------- | --------- | ----------- | ------------- |
+| 1    | Running | Ready   |                                       | P0        | P1          |               |
+| 2    | Running | Ready   |                                       | P0        | P1          |               |
+| 3    | Running | Ready   | P0 initiates I/O                      | P0        | P1          |               |
+| 4    | Blocked | Running | P0 is blocked, so P1 runs             | P1        |             | P0            |
+| 5    | Blocked | Running |                                       | P1        |             | P0            |
+| 6    | Blocked | Running |                                       | P1        |             | P0            |
+| 7    | Ready   | Running | I/O done, 인터럽트로 인해 state 변경. | P1        | P0          |               |
+| 8    | Ready   | Running | P1 now done                           | P1        | P0          |               |
+| 9    | Running | -       |                                       | P0        |             |               |
+| 10   | Running | -       |                                       | P0        |             |               |
+
+> P0 프로세스가 완전히 작업을 끝내기 전에 P1에 작업을 넘겨주는 등 모든 프로세스가 작업을 끝날 때까지 running state는 시간에 따라 계속 변화하는 데 이를 Context switch 라고 한다. 꽤나 비싼 작업이다.
+>
+> 그리고 이렇게 모든 state 에 scheduling policy 에 따라 관리된다. process <= cpu면 굳이 할 필요는 없다.
